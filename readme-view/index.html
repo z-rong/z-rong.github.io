@@ -70,10 +70,14 @@
     <div class="workspace">
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <span class="sidebar-title">文件</span>
+          <div class="sidebar-tabs" role="tablist" aria-label="侧栏视图">
+            <button class="sidebar-tab active" data-view="files" role="tab" aria-selected="true">文件</button>
+            <button class="sidebar-tab" data-view="outline" role="tab" aria-selected="false">大纲</button>
+          </div>
           <span class="pill" id="fileCount">0</span>
         </div>
         <nav class="file-tree" id="fileTree" aria-label="文件列表"></nav>
+        <div class="outline-panel" id="outlinePanel" hidden aria-label="文档大纲"></div>
         <div class="sidebar-foot">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="4" y="11" width="16" height="9" rx="2" />

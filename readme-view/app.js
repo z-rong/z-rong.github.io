@@ -32,6 +32,8 @@
     filter: '',
     searchContent: false,
     collapsed: {},
+    expanded: {},
+    sidebarView: 'files',
     blobUrls: {},
     source: 'sample',
     loading: false
@@ -301,6 +303,7 @@
     state.themes = [];
     state.activePath = null;
     state.collapsed = {};
+    state.expanded = {};
     state.loading = true;
     renderAll();
   }
@@ -329,6 +332,7 @@
     var _readme = state.files.filter(function (f) { return f.kind === 'markdown' && /^readme\./i.test(f.name); })[0];
     var _md = state.files.filter(function (f) { return f.kind === 'markdown'; })[0];
     state.activePath = (_readme || _md || state.files[0]).path;
+    expandAncestors(state.activePath);
     renderAll();
     var _srcLabel = (state.source === 'github')
       ? ('GitHub: ' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo)
@@ -403,6 +407,60 @@
     state.tree = root;
   }
 
+  function expandAncestors(path) {
+    if (!path) return;
+    var segs = path.split('/');
+    for (var i = 1; i < segs.length; i++) {
+      state.expanded['d:' + segs.slice(0, i).join('/')] = true;
+    }
+  }
+
+  // 生成当前文档大纲（读取 #content 内已渲染的标题）
+  function buildOutline() {
+    var panel = document.getElementById('outlinePanel');
+    if (!panel) return;
+    if (state.sidebarView !== 'outline') return; // 仅大纲视图需要
+    var contentEl = document.getElementById('content');
+    var heads = contentEl ? contentEl.querySelectorAll('h1,h2,h3,h4,h5,h6') : [];
+    if (!heads.length) {
+      panel.innerHTML = '<div class="tree-empty">' + (getActiveFile() ? '当前文档没有标题' : '未选择文件') + '</div>';
+      return;
+    }
+    var used = {};
+    var html = '<ul class="outline-list">';
+    for (var i = 0; i < heads.length; i++) {
+      var h = heads[i];
+      var id = h.id;
+      if (!id || used[id]) { id = 'sec-' + i; h.id = id; }
+      used[id] = true;
+      var lvl = parseInt(h.tagName.charAt(1), 10) || 1;
+      if (lvl < 1) lvl = 1; if (lvl > 6) lvl = 6;
+      var text = (h.textContent || '').trim();
+      html += '<li class="outline-item outline-lvl-' + lvl + '">' +
+        '<button type="button" class="outline-link" data-target="' + escapeHtml(id) + '" title="' + escapeHtml(text) + '">' +
+        escapeHtml(text || '(无标题)') + '</button></li>';
+    }
+    html += '</ul>';
+    panel.innerHTML = html;
+  }
+
+  // 侧栏视图切换：文件 / 大纲
+  function setSidebarView(v) {
+    state.sidebarView = v;
+    $$('.sidebar-tab').forEach(function (t) {
+      var on = t.getAttribute('data-view') === v;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    var treeEl = document.getElementById('fileTree');
+    var outlineEl = document.getElementById('outlinePanel');
+    var pill = document.getElementById('fileCount');
+    if (treeEl) treeEl.hidden = (v !== 'files');
+    if (outlineEl) outlineEl.hidden = (v !== 'outline');
+    if (pill) pill.hidden = (v !== 'files');
+    if (v === 'outline') buildOutline();
+  }
+
   function getActiveFile() {
     for (var i = 0; i < state.files.length; i++) {
       if (state.files[i].path === state.activePath) return state.files[i];
@@ -454,7 +512,8 @@
       node.dirs.forEach(function (d) {
         var inner = renderChildren(d);
         if (!inner) return; // 搜索时该目录无匹配则隐藏
-        var collapsed = !!state.collapsed['d:' + d.path] && !q;
+        var expanded = !!state.expanded['d:' + d.path];
+        var collapsed = !expanded && !q;
         parts.push('<li class="tree-dir' + (collapsed ? ' collapsed' : '') + '" data-dir="' + escapeHtml(d.path) + '">' +
           '<button class="dir-header" type="button" aria-expanded="' + (collapsed ? 'false' : 'true') + '">' +
           CARET_SVG + '<span class="dir-icon">' + DIR_SVG + '</span>' +
@@ -556,7 +615,7 @@
     if ((kind === 'markdown' || kind === 'text') && f.content === undefined) {
       contentEl.innerHTML = '<div class="empty-state"><div class="spinner"></div><p>正在读取「' + escapeHtml(f.name) + '」…</p></div>';
       ensureContent(f, function () {
-        if (state.activePath === f.path) renderContent();
+        if (state.activePath === f.path) renderAll();
       });
       return;
     }
@@ -587,18 +646,14 @@
     renderTree();
     renderContent();
     updateCounts();
+    buildOutline();
   }
 
   /* ---------------- 选择文件 ---------------- */
   function selectFile(path) {
     state.activePath = path;
-    // 展开所有祖先目录，确保选中的文件在树中可见
-    var segs = path.split('/');
-    for (var i = 1; i < segs.length; i++) {
-      state.collapsed['d:' + segs.slice(0, i).join('/')] = false;
-    }
-    renderTree();
-    renderContent();
+    expandAncestors(path); // 展开祖先目录，确保选中的文件在树中可见
+    renderAll();
   }
 
   /* ---------------- 抽屉（移动端） ---------------- */
@@ -676,6 +731,7 @@
     state.themes = [];
     state.activePath = null;
     state.collapsed = {};
+    state.expanded = {};
     state.loading = true;
     renderAll();
 
@@ -844,7 +900,8 @@
         if (header) {
           var li = header.closest('.tree-dir');
           var dpath = li.getAttribute('data-dir');
-          state.collapsed['d:' + dpath] = !state.collapsed['d:' + dpath];
+          var cur = !!state.expanded['d:' + dpath];
+          state.expanded['d:' + dpath] = !cur;
           li.classList.toggle('collapsed');
           header.setAttribute('aria-expanded', li.classList.contains('collapsed') ? 'false' : 'true');
           return;
@@ -854,6 +911,24 @@
           selectFile(item.getAttribute('data-path'));
           if (isMobile()) closeDrawer();
         }
+      });
+    }
+
+    // 侧栏 文件/大纲 切换
+    $$('.sidebar-tab').forEach(function (t) {
+      t.addEventListener('click', function () { setSidebarView(t.getAttribute('data-view')); });
+    });
+    // 大纲点击跳转到对应标题
+    var outlinePanel = document.getElementById('outlinePanel');
+    if (outlinePanel) {
+      outlinePanel.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('.outline-link') : null;
+        if (!btn) return;
+        var tid = btn.getAttribute('data-target');
+        var target = tid ? document.getElementById(tid) : null;
+        if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        $$('.outline-link').forEach(function (x) { x.classList.remove('outline-active'); });
+        btn.classList.add('outline-active');
       });
     }
 
@@ -980,6 +1055,7 @@
   function init() {
     initTheme();
     bindEvents();
+    setSidebarView(state.sidebarView);
     loadDefaultSource();
   }
 
