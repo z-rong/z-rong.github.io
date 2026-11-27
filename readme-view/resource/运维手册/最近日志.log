@@ -1,5 +1,0 @@
-[2026-11-27 10:00:12] INFO  start deploy
-[2026-11-27 10:00:13] INFO  copy files ok (14 files)
-[2026-11-27 10:00:14] INFO  health check passed
-[2026-11-27 10:00:15] WARN  TLS certificate expiring in 20 days
-[2026-11-27 10:00:16] INFO  deploy finished, status=success
