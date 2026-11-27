@@ -142,34 +142,113 @@
     return RESOURCE_ROOT + rel.split('/').map(encodeURIComponent).join('/');
   }
 
-  /* ---------------- 默认数据源：GitHub 仓库 z-rong/docs ---------------- */
-  var GITHUB_REPO = { owner: 'z-rong', repo: 'docs', branch: 'main' };
-  var GH_RAW_BASE = 'https://raw.githubusercontent.com/' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo + '/' + GITHUB_REPO.branch + '/';
-  var JSDP_BASE = 'https://cdn.jsdelivr.net/gh/' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo + '@' + GITHUB_REPO.branch + '/';
-  var JSD_DATA_API = 'https://data.jsdelivr.com/v1/packages/gh/' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo + '@' + GITHUB_REPO.branch + '?structure=flat';
-  var GH_TREE_API = 'https://api.github.com/repos/' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo + '/git/trees/' + GITHUB_REPO.branch + '?recursive=1';
+  /* ---------------- 数据源：可切换的 GitHub 仓库 ---------------- */
+  var REPO_PRESETS = [
+    'https://github.com/z-rong/docs',
+    'https://github.com/z-rong/docs-openharmony/tree/main/zh'
+  ];
+  var REPO_STORE_KEY = 'rv-repo-source';
+  var DEFAULT_REPO_URL = REPO_PRESETS[0];
+  var repoSource = null;
+
+  // 解析 GitHub 仓库地址 -> { owner, repo, branch, subpath, url }
+  function parseGitHubUrl(input) {
+    var url = String(input || '').trim();
+    if (!url) return null;
+    url = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    url = url.replace(/^github\.com\//i, '');
+    url = url.replace(/\.git$/i, '').replace(/\/+$/, '');
+    var parts = url.split('/').filter(Boolean);
+    if (parts.length < 2) return null;
+    var owner = parts[0], repo = parts[1];
+    if (!owner || !repo) return null;
+    var branch = 'main', subpath = '', isTree = false;
+    if (parts.length >= 4 && (parts[2] === 'tree' || parts[2] === 'blob')) {
+      isTree = true;
+      branch = parts[3] || 'main';
+      subpath = parts.slice(4).join('/');
+    }
+    var canon = 'https://github.com/' + owner + '/' + repo + (isTree ? ('/tree/' + branch + (subpath ? '/' + subpath : '')) : '');
+    return { owner: owner, repo: repo, branch: branch, subpath: subpath, url: canon };
+  }
+
+  function loadRepoSource() {
+    var saved = null;
+    try { saved = localStorage.getItem(REPO_STORE_KEY); } catch (e) {}
+    repoSource = parseGitHubUrl(saved) || parseGitHubUrl(DEFAULT_REPO_URL);
+    return repoSource;
+  }
+  function saveRepoSource(url) { try { localStorage.setItem(REPO_STORE_KEY, url); } catch (e) {} }
+
+  function sourceLabel() {
+    if (!repoSource) return 'GitHub';
+    return 'GitHub: ' + repoSource.owner + '/' + repoSource.repo + (repoSource.subpath ? '/' + repoSource.subpath : '');
+  }
+  function ghContentBase() {
+    var s = repoSource;
+    return 'https://cdn.jsdelivr.net/gh/' + s.owner + '/' + s.repo + '@' + s.branch + '/' + (s.subpath ? encodeGitHubPath(s.subpath) + '/' : '');
+  }
+  function ghRawBase() {
+    var s = repoSource;
+    return 'https://raw.githubusercontent.com/' + s.owner + '/' + s.repo + '/' + s.branch + '/' + (s.subpath ? encodeGitHubPath(s.subpath) + '/' : '');
+  }
+  function ghDataApi() {
+    var s = repoSource;
+    return 'https://data.jsdelivr.com/v1/packages/gh/' + s.owner + '/' + s.repo + '@' + s.branch + '?structure=flat';
+  }
+  function ghTreeApi() {
+    var s = repoSource;
+    return 'https://api.github.com/repos/' + s.owner + '/' + s.repo + '/git/trees/' + s.branch + '?recursive=1';
+  }
+
+  // 仓库根路径 -> 相对当前 subpath 的路径；不在 subpath 下返回 null
+  function toSubRel(rawPath) {
+    var p = String(rawPath || '').replace(/^\/+/, '');
+    if (!p) return null;
+    var sub = repoSource && repoSource.subpath;
+    if (sub) {
+      var pref = sub.replace(/\/+$/, '') + '/';
+      if (p.indexOf(pref) !== 0) return null;
+      return p.slice(pref.length);
+    }
+    return p;
+  }
+
+  // 由输入框/预设切换仓库并重新加载
+  function applyRepoUrl(url) {
+    var parsed = parseGitHubUrl(url);
+    if (!parsed) { toast('无法识别的仓库地址，请填写形如 https://github.com/owner/repo 或 …/tree/分支/子目录'); return; }
+    var same = repoSource && parsed.owner === repoSource.owner && parsed.repo === repoSource.repo && parsed.branch === repoSource.branch && parsed.subpath === repoSource.subpath;
+    repoSource = parsed;
+    saveRepoSource(parsed.url);
+    var input = document.getElementById('repoInput');
+    if (input) input.value = parsed.url;
+    if (same) return;
+    loadDefaultSource();
+    toast('已切换仓库：' + sourceLabel());
+  }
 
   function encodeGitHubPath(rel) {
     return rel.split('/').map(encodeURIComponent).join('/');
   }
 
-  // 获取仓库文件路径列表：优先 jsDelivr 数据接口（国内可达性更好），回退 GitHub API
+  // 获取文件路径列表（相对 subpath）：优先 jsDelivr 数据接口，回退 GitHub API
   function fetchGitHubFileList() {
-    return fetch(JSD_DATA_API, { cache: 'no-store' })
+    return fetch(ghDataApi(), { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('jsDelivr data ' + r.status); return r.json(); })
       .then(function (j) {
         var files = (j && j.files) ? j.files : [];
-        var paths = files.map(function (f) { return String(f.name || '').replace(/^\/+/, ''); }).filter(Boolean);
-        if (!paths.length) throw new Error('jsDelivr 文件列表为空');
+        var paths = files.map(function (f) { return toSubRel(f.name); }).filter(Boolean);
+        if (!paths.length) throw new Error('该目录下无文件');
         return paths;
       })
       .catch(function (e1) {
         console.warn('[readme-viewer] jsDelivr 列表失败，回退 GitHub API：', e1 && e1.message);
-        return fetch(GH_TREE_API, { cache: 'no-store' })
+        return fetch(ghTreeApi(), { cache: 'no-store' })
           .then(function (r) { if (!r.ok) throw new Error('GitHub API ' + r.status); return r.json(); })
           .then(function (j) {
             if (!j || !j.tree) throw new Error('GitHub 目录树为空');
-            return j.tree.filter(function (t) { return t.type === 'blob'; }).map(function (t) { return t.path; });
+            return j.tree.filter(function (t) { return t.type === 'blob'; }).map(function (t) { return toSubRel(t.path); }).filter(Boolean);
           });
       });
   }
@@ -177,25 +256,26 @@
   // 取文本：优先 jsDelivr CDN，失败回退 raw.githubusercontent
   function fetchTextWithFallback(rel) {
     var enc = encodeGitHubPath(rel);
-    return fetch(JSDP_BASE + enc, { cache: 'no-store' })
+    return fetch(ghContentBase() + enc, { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('jsDelivr ' + r.status); return r.text(); })
       .catch(function () {
-        return fetch(GH_RAW_BASE + enc, { cache: 'no-store' })
+        return fetch(ghRawBase() + enc, { cache: 'no-store' })
           .then(function (r) { return r.ok ? r.text() : ''; })
           .catch(function () { return ''; });
       });
   }
 
-  // 从 z-rong/docs 读取文件，构建 state.files
+  // 从当前仓库源读取文件，构建 state.files（仅 Markdown；图片登记用于正文内联）
   function loadGitHubDocs() {
     return fetchGitHubFileList().then(function (paths) {
       var tasks = [];
+      var base = ghContentBase();
       paths.forEach(function (rawPath) {
         var rel = normalizePath(rawPath);
         if (!rel) return;
         var nm = baseName(rel);
         var kind = fileKind(nm);
-        var jsUrl = JSDP_BASE + encodeGitHubPath(rel);
+        var jsUrl = base + encodeGitHubPath(rel);
         if (kind === 'image') {
           state.blobUrls[rel] = jsUrl;   // 仅用于正文内联图片解析，不显示在文件树
           return;
@@ -207,8 +287,9 @@
     });
   }
 
-  // 默认加载：先 GitHub docs，失败再回退本地 resource
+  // 默认加载：先 GitHub 源，失败再回退本地 resource
   function loadDefaultSource() {
+    if (!repoSource) loadRepoSource();
     resetForLoad('github');
     loadGitHubDocs()
       .then(function (files) { finalizeResourceFiles(files); })
@@ -334,9 +415,7 @@
     state.activePath = (_readme || _md || state.files[0]).path;
     expandAncestors(state.activePath);
     renderAll();
-    var _srcLabel = (state.source === 'github')
-      ? ('GitHub: ' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo)
-      : 'resource/';
+    var _srcLabel = (state.source === 'github') ? sourceLabel() : 'resource/';
     toast('已从 ' + _srcLabel + ' 读取 ' + state.files.length + ' 个文件');
   }
 
@@ -932,6 +1011,15 @@
       });
     }
 
+    // 仓库地址选择 / 自定义（回车应用）
+    var repoInput = document.getElementById('repoInput');
+    if (repoInput) {
+      if (repoSource) repoInput.value = repoSource.url;
+      var applyRepoInput = function () { var v = repoInput.value.trim(); if (v) applyRepoUrl(v); };
+      repoInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); applyRepoInput(); repoInput.blur(); } });
+      repoInput.addEventListener('change', applyRepoInput);
+    }
+
     // 搜索
     var searchInput = $('#searchInput');
     var searchClear = $('#searchClear');
@@ -1054,6 +1142,7 @@
   /* ---------------- 启动 ---------------- */
   function init() {
     initTheme();
+    loadRepoSource();
     bindEvents();
     setSidebarView(state.sidebarView);
     loadDefaultSource();

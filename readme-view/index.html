@@ -79,11 +79,16 @@
         <nav class="file-tree" id="fileTree" aria-label="文件列表"></nav>
         <div class="outline-panel" id="outlinePanel" hidden aria-label="文档大纲"></div>
         <div class="sidebar-foot">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="11" width="16" height="9" rx="2" />
-            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-          </svg>
-          <span>默认读取 GitHub：z-rong/docs · 也可打开本地文件夹</span>
+          <div class="repo-picker" title="选择或输入要打开的 GitHub 仓库，回车应用">
+            <svg class="repo-picker__icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+            </svg>
+            <input id="repoInput" class="repo-picker__input" list="repoPresets" type="text" spellcheck="false" autocomplete="off" placeholder="GitHub 仓库地址（回车打开）" />
+            <datalist id="repoPresets">
+              <option value="https://github.com/z-rong/docs"></option>
+              <option value="https://github.com/z-rong/docs-openharmony/tree/main/zh"></option>
+            </datalist>
+          </div>
         </div>
       </aside>
 
