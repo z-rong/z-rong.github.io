@@ -229,28 +229,68 @@
     renderAll();
   }
 
+  // 从构建期生成的 resource-data.js（window.RESOURCE_DATA）构造文件列表（供 file:// 双击离线打开）
+  function loadEmbeddedResource() {
+    var data = (typeof window !== 'undefined') ? window.RESOURCE_DATA : null;
+    if (!data || !data.files || !data.files.length) throw new Error('无内嵌资源数据（请运行 node build-embedded.mjs）');
+    return data.files.map(function (it) {
+      var rel = normalizePath(it.path);
+      var nm = baseName(rel);
+      var th = themeOf(rel);
+      var kind = it.kind || fileKind(nm);
+      if (kind === 'image') {
+        if (it.dataUrl) state.blobUrls[rel] = it.dataUrl;
+        return { path: rel, name: nm, theme: th, kind: kind, url: it.dataUrl || encodeResourceUrl(rel) };
+      }
+      return { path: rel, name: nm, theme: th, kind: kind, content: it.content || '', url: it.dataUrl || encodeResourceUrl(rel) };
+    });
+  }
+
+  function finalizeResourceFiles(files) {
+    if (!files || !files.length) throw new Error('没有可读取的文件');
+    state.loading = false;
+    state.files = files.sort(function (a, b) { return a.path.localeCompare(b.path, 'zh'); });
+    buildThemes();
+    var _readme = state.files.filter(function (f) { return f.kind === 'markdown' && /^readme\./i.test(f.name); })[0];
+    var _md = state.files.filter(function (f) { return f.kind === 'markdown'; })[0];
+    state.activePath = (_readme || _md || state.files[0]).path;
+    renderAll();
+    toast('已从 resource/ 读取 ' + state.files.length + ' 个文件');
+  }
+
   function loadResourceDir() {
     resetForLoad('resource');
+    var isFile = (typeof location !== 'undefined' && location.protocol === 'file:');
+
+    if (isFile) {
+      // file:// 下浏览器禁止读取目录列表，直接使用构建期内嵌数据
+      try { finalizeResourceFiles(loadEmbeddedResource()); }
+      catch (e) {
+        console.warn('[readme-viewer] file:// 且无内嵌数据，回退内置示例：', e && e.message);
+        state.loading = false; loadSample();
+        toast('本地双击打开需先生成内嵌数据（node build-embedded.mjs），已显示内置示例');
+      }
+      return;
+    }
+
     crawlResource()
-      .catch(function (err) {
-        console.warn('[readme-viewer] 目录列表不可用，尝试读取清单：', err && err.message);
-        return fetchResourceManifest();
-      })
       .then(function (list) {
         if (!list || !list.length) throw new Error('resource 目录为空');
         return buildResourceFiles(list);
       })
-      .then(function (files) {
-        if (!files.length) throw new Error('没有可读取的文件');
-        state.loading = false;
-        state.files = files.sort(function (a, b) { return a.path.localeCompare(b.path, 'zh'); });
-        buildThemes();
-        var _readme = state.files.filter(function (f) { return f.kind === 'markdown' && /^readme\./i.test(f.name); })[0];
-        var _md = state.files.filter(function (f) { return f.kind === 'markdown'; })[0];
-        state.activePath = (_readme || _md || state.files[0]).path;
-        renderAll();
-        toast('已从 resource/ 读取 ' + state.files.length + ' 个文件');
+      .catch(function (err) {
+        console.warn('[readme-viewer] 目录列表不可用，尝试清单：', err && err.message);
+        return fetchResourceManifest()
+          .then(function (list) {
+            if (!list || !list.length) throw new Error('清单为空');
+            return buildResourceFiles(list);
+          })
+          .catch(function (e2) {
+            console.warn('[readme-viewer] 清单不可用，尝试内嵌数据：', e2 && e2.message);
+            return loadEmbeddedResource();
+          });
       })
+      .then(function (files) { finalizeResourceFiles(files); })
       .catch(function (err) {
         console.warn('[readme-viewer] 读取 resource 失败，回退内置示例：', err && err.message);
         state.loading = false;
