@@ -26,6 +26,7 @@
   /* ---------------- 状态 ---------------- */
   var state = {
     files: [],
+    tree: null,
     themes: [],
     activePath: null,
     filter: '',
@@ -192,16 +193,13 @@
         if (!rel) return;
         var nm = baseName(rel);
         var kind = fileKind(nm);
-        if (kind === 'binary') return; // 跳过压缩包 / 视频等二进制
-        var th = themeOf(rel);
         var jsUrl = JSDP_BASE + encodeGitHubPath(rel);
         if (kind === 'image') {
-          state.blobUrls[rel] = jsUrl;
-          tasks.push(Promise.resolve({ path: rel, name: nm, theme: th, kind: kind, url: jsUrl }));
+          state.blobUrls[rel] = jsUrl;   // 仅用于正文内联图片解析，不显示在文件树
           return;
         }
-        // 正文按需加载（见 ensureContent），这里只登记路径
-        tasks.push(Promise.resolve({ path: rel, name: nm, theme: th, kind: kind, url: jsUrl, _remote: rel }));
+        if (kind !== 'markdown') return;  // 只读 Markdown/README，其余忽略
+        tasks.push(Promise.resolve({ path: rel, name: nm, theme: themeOf(rel), kind: 'markdown', url: jsUrl, _remote: rel }));
       });
       return Promise.all(tasks);
     });
@@ -269,28 +267,26 @@
 
   // 根据路径清单抓取内容，构造 state.files
   function buildResourceFiles(list) {
-    var tasks = list.map(function (item) {
+    var tasks = [];
+    list.forEach(function (item) {
       var rel = normalizePath(item.rel);
-      if (!rel) return null;
+      if (!rel) return;
       var nm = baseName(rel);
-      var th = themeOf(rel);
       var kind = fileKind(nm);
       var url = encodeResourceUrl(rel);
       if (kind === 'image') {
-        state.blobUrls[rel] = url;
-        return Promise.resolve({ path: rel, name: nm, theme: th, kind: kind, url: url });
+        state.blobUrls[rel] = url;   // 仅用于正文内联图片解析
+        return;
       }
-      if (kind === 'binary') {
-        return Promise.resolve({ path: rel, name: nm, theme: th, kind: kind, url: url });
-      }
-      return fetch(url, { cache: 'no-store' }).then(function (r) {
+      if (kind !== 'markdown') return; // 只读 Markdown/README，其余忽略
+      tasks.push(fetch(url, { cache: 'no-store' }).then(function (r) {
         return r.ok ? r.text() : '';
       }).then(function (txt) {
-        return { path: rel, name: nm, theme: th, kind: kind, content: txt, url: url };
+        return { path: rel, name: nm, theme: themeOf(rel), kind: 'markdown', content: txt, url: url };
       }).catch(function () {
-        return { path: rel, name: nm, theme: th, kind: kind, content: '', url: url };
-      });
-    }).filter(Boolean);
+        return { path: rel, name: nm, theme: themeOf(rel), kind: 'markdown', content: '', url: url };
+      }));
+    });
     return Promise.all(tasks);
   }
 
@@ -301,6 +297,7 @@
     state.blobUrls = {};
     state.source = source;
     state.files = [];
+    state.tree = null;
     state.themes = [];
     state.activePath = null;
     state.collapsed = {};
@@ -312,24 +309,23 @@
   function loadEmbeddedResource() {
     var data = (typeof window !== 'undefined') ? window.RESOURCE_DATA : null;
     if (!data || !data.files || !data.files.length) throw new Error('无内嵌资源数据（请运行 node build-embedded.mjs）');
-    return data.files.map(function (it) {
+    var out = [];
+    data.files.forEach(function (it) {
       var rel = normalizePath(it.path);
       var nm = baseName(rel);
-      var th = themeOf(rel);
       var kind = it.kind || fileKind(nm);
-      if (kind === 'image') {
-        if (it.dataUrl) state.blobUrls[rel] = it.dataUrl;
-        return { path: rel, name: nm, theme: th, kind: kind, url: it.dataUrl || encodeResourceUrl(rel) };
-      }
-      return { path: rel, name: nm, theme: th, kind: kind, content: it.content || '', url: it.dataUrl || encodeResourceUrl(rel) };
+      if (kind === 'image') { if (it.dataUrl) state.blobUrls[rel] = it.dataUrl; return; }
+      if (kind !== 'markdown') return; // 只读 Markdown/README
+      out.push({ path: rel, name: nm, theme: themeOf(rel), kind: 'markdown', content: it.content || '', url: encodeResourceUrl(rel) });
     });
+    return out;
   }
 
   function finalizeResourceFiles(files) {
     if (!files || !files.length) throw new Error('没有可读取的文件');
     state.loading = false;
     state.files = files.sort(function (a, b) { return a.path.localeCompare(b.path, 'zh'); });
-    buildThemes();
+    buildTree();
     var _readme = state.files.filter(function (f) { return f.kind === 'markdown' && /^readme\./i.test(f.name); })[0];
     var _md = state.files.filter(function (f) { return f.kind === 'markdown'; })[0];
     state.activePath = (_readme || _md || state.files[0]).path;
@@ -381,22 +377,30 @@
       });
   }
 
-  /* ---------------- 构建主题分组 ---------------- */
-  function buildThemes() {
-    var map = {};
+  /* ---------------- 构建多级目录树 ---------------- */
+  function buildTree() {
+    var root = { type: 'dir', name: '', path: '', dirs: [], files: [] };
     state.files.forEach(function (f) {
-      if (!map[f.theme]) map[f.theme] = [];
-      map[f.theme].push(f);
+      var segs = f.path.split('/');
+      var node = root;
+      for (var i = 0; i < segs.length - 1; i++) {
+        var dname = segs[i];
+        var dpath = segs.slice(0, i + 1).join('/');
+        var d = null;
+        for (var j = 0; j < node.dirs.length; j++) { if (node.dirs[j].name === dname) { d = node.dirs[j]; break; } }
+        if (!d) { d = { type: 'dir', name: dname, path: dpath, dirs: [], files: [] }; node.dirs.push(d); }
+        node = d;
+      }
+      node.files.push(f);
     });
-    var names = Object.keys(map).sort(function (a, b) {
-      if (a === '根目录') return -1;
-      if (b === '根目录') return 1;
-      return a.localeCompare(b, 'zh');
-    });
-    state.themes = names.map(function (name) {
-      var fs = map[name].slice().sort(function (a, b) { return a.path.localeCompare(b.path, 'zh'); });
-      return { name: name, files: fs };
-    });
+    var collator = (typeof Intl !== 'undefined' && Intl.Collator) ? new Intl.Collator('zh') : null;
+    var cmp = function (a, b) { return collator ? collator.compare(a.name, b.name) : a.name.localeCompare(b.name); };
+    (function sortNode(n) {
+      n.dirs.sort(cmp);
+      n.files.sort(cmp);
+      n.dirs.forEach(sortNode);
+    })(root);
+    state.tree = root;
   }
 
   function getActiveFile() {
@@ -430,42 +434,50 @@
   /* ---------------- 渲染：侧栏 ---------------- */
   var CARET_SVG = '<svg class="theme-caret" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>';
   var FILE_SVG = '<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
+  var DIR_SVG = '<svg class="dir-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>';
 
   function renderTree() {
-    var tree = $('#fileTree');
+    var treeEl = $('#fileTree');
+    if (!treeEl) return;
+    if (!state.tree) { treeEl.innerHTML = ''; return; }
     var q = state.filter.trim().toLowerCase();
-    var html = '';
     var shown = 0;
 
-    state.themes.forEach(function (theme) {
-      var matched = theme.files.filter(function (f) { return matchesFilter(f, q); });
-      if (q && matched.length === 0) return;
-      shown += matched.length;
-
-      var collapsed = !!state.collapsed[theme.name] && !q;
-      html += '<div class="theme-group' + (collapsed ? ' collapsed' : '') + '" data-theme="' + escapeHtml(theme.name) + '">';
-      html += '<button class="theme-header" type="button">' + CARET_SVG +
-        '<span class="theme-name">' + highlight(theme.name, q) + '</span>' +
-        '<span class="theme-count">' + theme.files.length + '</span></button>';
-      html += '<ul class="theme-files">';
-      matched.forEach(function (f) {
-        var active = f.path === state.activePath ? ' active' : '';
-        var segs = f.path.split('/');
-        var sub = segs.slice(1, segs.length - 1).join(' / ');
-        html += '<li><button class="file-item' + active + '" type="button" data-path="' + escapeHtml(f.path) + '" title="' + escapeHtml(f.path) + '">' +
-          FILE_SVG +
-          '<span class="file-label"><span class="file-name">' + highlight(f.name, q) + '</span>' +
-          (sub ? '<span class="file-sublabel">' + highlight(sub, q) + '</span>' : '') +
-          '</span></button></li>';
+    function countFiles(node) {
+      var n = node.files.length;
+      node.dirs.forEach(function (d) { n += countFiles(d); });
+      return n;
+    }
+    function renderChildren(node) {
+      var parts = [];
+      // 先目录、后文件 —— 根目录下的文件与顶层目录处于同一级
+      node.dirs.forEach(function (d) {
+        var inner = renderChildren(d);
+        if (!inner) return; // 搜索时该目录无匹配则隐藏
+        var collapsed = !!state.collapsed['d:' + d.path] && !q;
+        parts.push('<li class="tree-dir' + (collapsed ? ' collapsed' : '') + '" data-dir="' + escapeHtml(d.path) + '">' +
+          '<button class="dir-header" type="button" aria-expanded="' + (collapsed ? 'false' : 'true') + '">' +
+          CARET_SVG + '<span class="dir-icon">' + DIR_SVG + '</span>' +
+          '<span class="dir-name">' + highlight(d.name, q) + '</span>' +
+          '<span class="dir-count">' + countFiles(d) + '</span></button>' +
+          '<ul class="dir-children">' + inner + '</ul></li>');
       });
-      html += '</ul></div>';
-    });
+      node.files.forEach(function (f) {
+        if (!matchesFilter(f, q)) return;
+        shown++;
+        var active = f.path === state.activePath ? ' active' : '';
+        parts.push('<li class="tree-leaf"><button class="file-item' + active + '" type="button" data-path="' + escapeHtml(f.path) + '" title="' + escapeHtml(f.path) + '">' +
+          FILE_SVG + '<span class="file-label"><span class="file-name">' + highlight(f.name, q) + '</span></span></button></li>');
+      });
+      return parts.join('');
+    }
 
+    var body = renderChildren(state.tree);
     if (shown === 0) {
-      tree.innerHTML = '<div class="tree-empty">' +
+      treeEl.innerHTML = '<div class="tree-empty">' +
         (q ? '没有匹配「' + escapeHtml(state.filter) + '」的文件' : '暂无 Markdown 文件') + '</div>';
     } else {
-      tree.innerHTML = html;
+      treeEl.innerHTML = '<ul class="tree-root">' + body + '</ul>';
     }
   }
 
@@ -580,9 +592,12 @@
   /* ---------------- 选择文件 ---------------- */
   function selectFile(path) {
     state.activePath = path;
-    $$('.file-item').forEach(function (el) {
-      el.classList.toggle('active', el.getAttribute('data-path') === path);
-    });
+    // 展开所有祖先目录，确保选中的文件在树中可见
+    var segs = path.split('/');
+    for (var i = 1; i < segs.length; i++) {
+      state.collapsed['d:' + segs.slice(0, i).join('/')] = false;
+    }
+    renderTree();
     renderContent();
   }
 
@@ -657,6 +672,7 @@
     state.blobUrls = {};
     state.source = 'folder';
     state.files = [];
+    state.tree = null;
     state.themes = [];
     state.activePath = null;
     state.collapsed = {};
@@ -683,7 +699,7 @@
     })).then(function (files) {
       state.loading = false;
       state.files = files.sort(function (a, b) { return a.path.localeCompare(b.path, 'zh'); });
-      buildThemes();
+      buildTree();
       if (state.files.length) {
         state.activePath = state.files[0].path;
         renderAll();
@@ -800,7 +816,7 @@
       };
     });
     state.loading = false;
-    buildThemes();
+    buildTree();
     state.activePath = state.files.length ? state.files[0].path : null;
     renderAll();
   }
@@ -824,12 +840,13 @@
     var tree = $('#fileTree');
     if (tree) {
       tree.addEventListener('click', function (e) {
-        var header = e.target.closest('.theme-header');
+        var header = e.target.closest('.dir-header');
         if (header) {
-          var group = header.closest('.theme-group');
-          var name = group.getAttribute('data-theme');
-          state.collapsed[name] = !state.collapsed[name];
-          group.classList.toggle('collapsed');
+          var li = header.closest('.tree-dir');
+          var dpath = li.getAttribute('data-dir');
+          state.collapsed['d:' + dpath] = !state.collapsed['d:' + dpath];
+          li.classList.toggle('collapsed');
+          header.setAttribute('aria-expanded', li.classList.contains('collapsed') ? 'false' : 'true');
           return;
         }
         var item = e.target.closest('.file-item');
