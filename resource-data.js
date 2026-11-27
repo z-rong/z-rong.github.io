@@ -1,6 +1,6 @@
 /* 自动生成：由 build-embedded.mjs 扫描 resource/ 生成，用于 file:// 双击本地离线打开。请勿手改；改动 resource/ 后重新运行 node build-embedded.mjs。 */
 window.RESOURCE_DATA = {
-  "generatedAt": "2026-11-27T05:59:59.414Z",
+  "generatedAt": "2026-11-27T06:58:02.031Z",
   "files": [
     {
       "path": "关于本项目.txt",

@@ -953,3 +953,75 @@ html[data-theme="dark"] mark.hl { background: rgba(255, 200, 0, 0.30); }
 .cf-open:hover{text-decoration:underline}
 .code-file pre{margin:0;border:none;border-radius:0}
 .code-file pre code{display:block;padding:14px 16px;white-space:pre;overflow:auto;font-family:var(--font-mono);font-size:13px;line-height:1.6;color:var(--code-text);background:var(--code-bg)}
+
+/* ============================================================
+   顶层标签页（文件查看 / 音乐播放）—— 新增
+   ============================================================ */
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 48px;
+  padding: 0 12px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  z-index: 40;
+}
+
+.app-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+  transition: color var(--transition), background var(--transition);
+}
+.app-tab:hover { color: var(--text); background: var(--bg-hover); }
+.app-tab.active { color: var(--accent); }
+.app-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+}
+.app-tab svg { flex: 0 0 auto; }
+
+.tab-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+.tab-panel {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+.tab-panel.active { display: block; }
+
+/* 原有查看器在面板内填满高度（覆盖它的 100vh） */
+.tab-panel .app { height: 100%; }
+
+/* 音乐播放器 iframe 填满面板 */
+.music-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #0a0e1a;
+}

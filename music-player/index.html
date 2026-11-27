@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>我的音乐 · Music Player</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ===================== 顶部标题栏 ===================== -->
+  <header class="app-header" id="appHeader">
+    <div class="app-header__brand">
+      <span class="app-header__logo">♪</span>
+      <h1 class="app-header__title">我的音乐</h1>
+    </div>
+    <span class="app-header__tagline">Music, everywhere.</span>
+  </header>
+
+  <!-- ===================== 主内容区 ===================== -->
+  <main class="app-main">
+    <!-- 分类卡片视图 -->
+    <section id="categoriesView" class="view categories-view">
+      <div class="section-head">
+        <h2 class="section-head__title">音乐分类</h2>
+        <p class="section-head__hint">选择一个分类，开始聆听</p>
+      </div>
+      <div id="categoriesGrid" class="categories-grid"></div>
+    </section>
+
+    <!-- 歌曲列表视图 -->
+    <section id="songsView" class="view songs-view is-hidden">
+      <div class="songs-view__head">
+        <button id="backToCategoriesBtn" class="back-btn" type="button" aria-label="返回分类">
+          <span class="back-btn__arrow">←</span>
+          <span>全部分类</span>
+        </button>
+        <div class="songs-view__titles">
+          <h2 id="songsViewTitle" class="songs-view__title">分类</h2>
+          <p id="songsViewSubtitle" class="songs-view__subtitle">0 首歌曲</p>
+        </div>
+      </div>
+      <ul id="songsList" class="songs-list"></ul>
+    </section>
+  </main>
+
+  <!-- ===================== 底部固定播放条 ===================== -->
+  <footer id="miniPlayer" class="mini-player">
+    <div class="mini-player__inner">
+      <!-- 当前歌曲信息（点击进入播放详情页） -->
+      <button id="miniTrackInfo" class="mini-track" type="button" aria-label="打开播放详情页">
+        <span id="miniCover" class="mini-track__cover cover"></span>
+        <span class="mini-track__meta">
+          <span id="miniTitle" class="mini-track__title">未播放</span>
+          <span id="miniArtist" class="mini-track__artist">选择一首歌曲开始</span>
+        </span>
+      </button>
+
+      <!-- 播放控制 -->
+      <div class="mini-player__controls">
+        <button id="prevBtn" class="ctrl-btn" type="button" aria-label="上一首"></button>
+        <button id="playPauseBtn" class="ctrl-btn ctrl-btn--primary" type="button" aria-label="播放/暂停"></button>
+        <button id="nextBtn" class="ctrl-btn" type="button" aria-label="下一首"></button>
+        <button id="miniMoveBtn" class="ctrl-btn" type="button" aria-label="移动到分类" title="移动到分类"></button>
+      </div>
+
+      <!-- 进度条 -->
+      <div class="mini-player__progress">
+        <span id="curTime" class="time-label">0:00</span>
+        <input id="progressBar" class="range range--progress" type="range" min="0" max="100" step="0.1" value="0" aria-label="播放进度" />
+        <span id="durTime" class="time-label">0:00</span>
+      </div>
+
+      <!-- 音量控制 -->
+      <div class="mini-player__volume">
+        <button id="muteBtn" class="icon-btn" type="button" aria-label="静音切换"></button>
+        <input id="volumeBar" class="range range--volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="音量" />
+      </div>
+    </div>
+  </footer>
+
+  <!-- ===================== 全屏播放详情页 ===================== -->
+  <div id="nowPlayingView" class="now-playing is-hidden" aria-hidden="true">
+    <div class="now-playing__bg"></div>
+    <button id="closeNowPlayingBtn" class="now-playing__close" type="button" aria-label="关闭详情页">✕</button>
+
+    <div class="now-playing__content">
+      <!-- 旋转唱片 / 大封面 -->
+      <div class="now-playing__art">
+        <div class="vinyl" id="vinyl">
+          <div class="vinyl__disc">
+            <div id="npCover" class="vinyl__cover cover"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 信息与控制面板 -->
+      <div class="now-playing__panel">
+        <span id="npCategory" class="now-playing__category">分类</span>
+        <h2 id="npTitle" class="now-playing__title">歌名</h2>
+        <p id="npArtist" class="now-playing__artist">歌手</p>
+        <p id="npAlbum" class="now-playing__album">专辑</p>
+
+        <div id="npLyrics" class="now-playing__lyrics"></div>
+
+        <div class="now-playing__progress">
+          <span id="npCurTime" class="time-label">0:00</span>
+          <input id="npProgressBar" class="range range--progress" type="range" min="0" max="100" step="0.1" value="0" aria-label="播放进度" />
+          <span id="npDurTime" class="time-label">0:00</span>
+        </div>
+
+        <div class="now-playing__controls">
+          <button id="npPrevBtn" class="ctrl-btn" type="button" aria-label="上一首"></button>
+          <button id="npPlayPauseBtn" class="ctrl-btn ctrl-btn--primary ctrl-btn--large" type="button" aria-label="播放/暂停"></button>
+          <button id="npNextBtn" class="ctrl-btn" type="button" aria-label="下一首"></button>
+          <button id="npMoveBtn" class="ctrl-btn" type="button" aria-label="移动到分类" title="移动到分类"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 移动到分类弹窗 -->
+  <div id="moveModal" class="modal is-hidden" aria-hidden="true">
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="移动到分类">
+      <h3 class="modal__title">移动《<span id="moveSongTitle"></span>》到分类</h3>
+      <div id="moveCategoryList" class="modal__list"></div>
+      <button id="moveCancelBtn" class="modal__cancel" type="button">取消</button>
+    </div>
+  </div>
+
+  <!-- 音频元素 -->
+  <audio id="audioEl" preload="metadata"></audio>
+
+  <script src="app.js"></script>
+</body>
+</html>
