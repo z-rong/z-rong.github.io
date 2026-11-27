@@ -3,163 +3,177 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="z-rong 的个人空间：文件查看器与本地音乐播放器两个入口。" />
+  <meta name="description" content="z-rong 的个人空间：文件查看与音乐播放，切换互不影响，音乐可后台持续播放。" />
   <title>z-rong · 我的空间</title>
   <style>
-    :root {
-      --bg: #0b1020;
-      --bg-2: #111a33;
-      --card: rgba(255, 255, 255, 0.05);
-      --card-hover: rgba(255, 255, 255, 0.09);
-      --border: rgba(255, 255, 255, 0.10);
-      --text: #e9eefb;
-      --muted: #9aa6c2;
-      --accent: #5b8cff;
-      --accent-2: #a855f7;
-      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        --bg: #eef2fb;
-        --bg-2: #ffffff;
-        --card: #ffffff;
-        --card-hover: #ffffff;
-        --border: #e2e8f4;
-        --text: #1a2238;
-        --muted: #66718c;
-        --accent: #2563eb;
-        --accent-2: #7c3aed;
-        --shadow: 0 16px 44px rgba(37, 60, 120, 0.14);
-      }
-    }
+    :root { --bar-h: 54px; }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(1200px 700px at 15% -10%, rgba(91, 140, 255, 0.28), transparent 60%),
-        radial-gradient(1000px 600px at 100% 110%, rgba(168, 85, 247, 0.24), transparent 55%),
-        linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-    }
-    .landing {
-      width: min(920px, 100%);
-    }
-    .hero {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-    .logo {
-      width: 64px; height: 64px; margin: 0 auto 18px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 18px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      color: #fff; font-size: 34px; font-weight: 800; letter-spacing: -1px;
-      box-shadow: var(--shadow);
-    }
-    .hero h1 {
-      margin: 0 0 10px;
-      font-size: clamp(26px, 4vw, 40px);
-      font-weight: 800;
-      letter-spacing: 0.5px;
-    }
-    .hero p { margin: 0; color: var(--muted); font-size: 15px; }
-
-    .entries {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-    }
-    @media (max-width: 640px) {
-      .entries { grid-template-columns: 1fr; }
-    }
-
-    .entry {
-      position: relative;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      padding: 28px;
-      min-height: 210px;
-      border-radius: 20px;
-      border: 1px solid var(--border);
-      background: var(--card);
-      color: var(--text);
-      text-decoration: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: #0b1020;
+      color: #e9eefb;
       overflow: hidden;
-      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
-      box-shadow: var(--shadow);
     }
-    .entry::before {
-      content: "";
-      position: absolute;
-      inset: 0 0 auto 0;
-      height: 4px;
-      opacity: 0.9;
-    }
-    .entry--docs::before { background: linear-gradient(90deg, #5b8cff, #38bdf8); }
-    .entry--music::before { background: linear-gradient(90deg, #f472b6, #a855f7); }
-    .entry:hover {
-      transform: translateY(-4px);
-      background: var(--card-hover);
-      border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-    }
-    .entry__icon {
-      width: 52px; height: 52px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 26px;
-      border-radius: 14px;
-      background: rgba(127, 127, 160, 0.16);
-    }
-    .entry__title { font-size: 22px; font-weight: 750; }
-    .entry__desc { color: var(--muted); font-size: 14px; line-height: 1.55; flex: 1; }
-    .entry__cta {
-      align-self: flex-start;
-      font-size: 14px; font-weight: 700;
-      color: var(--accent);
-    }
-    .entry--music .entry__cta { color: var(--accent-2); }
 
-    .foot {
-      margin-top: 36px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 12.5px;
-      letter-spacing: 0.3px;
+    /* ---------- 顶部切换栏 ---------- */
+    .app-tabs {
+      flex: 0 0 var(--bar-h);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 14px;
+      background: linear-gradient(180deg, #111a30 0%, #0d1424 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      z-index: 10;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 9px;
+      margin-right: 14px;
+      font-weight: 800; letter-spacing: 0.4px;
+      color: #e9eefb; user-select: none; white-space: nowrap;
+    }
+    .brand__dot {
+      width: 26px; height: 26px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #5b8cff, #a855f7);
+      color: #fff; font-size: 15px; font-weight: 800;
+      box-shadow: 0 6px 16px rgba(91, 140, 255, 0.35);
+    }
+    .app-tab {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px;
+      border: none; border-radius: 10px;
+      background: transparent; color: #9aa6c2;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: color .16s ease, background .16s ease;
+      white-space: nowrap;
+    }
+    .app-tab:hover { color: #e9eefb; background: rgba(255, 255, 255, 0.06); }
+    .app-tab.active { color: #fff; background: rgba(91, 140, 255, 0.20); }
+    .app-tab .ico { font-size: 15px; line-height: 1; }
+
+    .tabs-spacer { flex: 1; }
+    .playing-hint {
+      display: none; align-items: center; gap: 6px;
+      font-size: 12.5px; color: #7fd6a8;
+      padding-right: 4px;
+    }
+    .playing-hint.show { display: inline-flex; }
+    .playing-hint__dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #35d07f;
+      box-shadow: 0 0 0 0 rgba(53, 208, 127, 0.6);
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(53, 208, 127, 0.55); }
+      70% { box-shadow: 0 0 0 7px rgba(53, 208, 127, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(53, 208, 127, 0); }
+    }
+
+    /* ---------- 内容面板（两个 iframe 常驻，仅切换可见性，绝不卸载） ---------- */
+    .panels {
+      flex: 1 1 auto;
+      position: relative;
+      min-height: 0;
+      background: #0b1020;
+    }
+    .panel {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #0b1020;
+      visibility: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .panel.active {
+      visibility: visible;
+      pointer-events: auto;
+      z-index: 1;
     }
   </style>
 </head>
 <body>
-  <main class="landing">
-    <header class="hero">
-      <div class="logo">z</div>
-      <h1>我的空间</h1>
-      <p>选择一个入口开始</p>
-    </header>
+  <nav class="app-tabs" role="tablist" aria-label="功能切换">
+    <div class="brand"><span class="brand__dot">z</span><span>我的空间</span></div>
 
-    <section class="entries">
-      <a class="entry entry--docs" href="readme-view/">
-        <span class="entry__icon">📄</span>
-        <span class="entry__title">文件查看</span>
-        <span class="entry__desc">本地 README / 文档查看器：左侧文件树、沉浸式阅读、明暗主题、全文搜索。</span>
-        <span class="entry__cta">进入文件查看 →</span>
-      </a>
+    <button class="app-tab active" data-tab="files" role="tab" aria-selected="true">
+      <span class="ico">📄</span><span>文件查看</span>
+    </button>
+    <button class="app-tab" data-tab="music" role="tab" aria-selected="false">
+      <span class="ico">🎵</span><span>音乐播放</span>
+    </button>
 
-      <a class="entry entry--music" href="music-player/">
-        <span class="entry__icon">🎵</span>
-        <span class="entry__title">音乐播放</span>
-        <span class="entry__desc">本地音乐播放器：分类浏览、自动收录新音频到「未分组」、可自建分组。</span>
-        <span class="entry__cta">进入音乐播放 →</span>
-      </a>
-    </section>
+    <span class="tabs-spacer"></span>
+    <span class="playing-hint" id="playingHint" title="音乐正在后台播放，切到文件查看不会中断">
+      <span class="playing-hint__dot"></span>音乐播放中…
+    </span>
+  </nav>
 
-    <footer class="foot">© z-rong · 纯静态 · 本地优先 · 数据不上传</footer>
-  </main>
+  <div class="panels">
+    <!-- 文件查看：独立目录 readme-view/ -->
+    <iframe id="panel-files" class="panel active" src="readme-view/index.html" title="文件查看" allow="autoplay"></iframe>
+    <!-- 音乐播放：独立目录 music-player/（常驻，切换不卸载，保证后台继续播放） -->
+    <iframe id="panel-music" class="panel" src="music-player/index.html" title="音乐播放" allow="autoplay"></iframe>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+      var KEY = 'zr-shell-tab';
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('.app-tab'));
+      var panels = {
+        files: document.getElementById('panel-files'),
+        music: document.getElementById('panel-music')
+      };
+      var hint = document.getElementById('playingHint');
+      var musicFrame = panels.music;
+
+      function activate(name) {
+        if (!panels[name]) name = 'files';
+        tabs.forEach(function (t) {
+          var on = t.getAttribute('data-tab') === name;
+          t.classList.toggle('active', on);
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        Object.keys(panels).forEach(function (k) {
+          if (panels[k]) panels[k].classList.toggle('active', k === name);
+        });
+        try { localStorage.setItem(KEY, name); } catch (e) {}
+      }
+
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { activate(t.getAttribute('data-tab')); });
+      });
+
+      var saved = null;
+      try { saved = localStorage.getItem(KEY); } catch (e) {}
+      activate(saved === 'music' ? 'music' : 'files');
+
+      // 监听播放器 iframe 的播放状态，用于点“文件查看”时显示“音乐播放中”提示。
+      // 播放器通过 postMessage 上报 { type:'mp-playing', playing:true/false }。
+      var musicPlaying = false;
+      function setHint(playing) {
+        musicPlaying = playing;
+        if (hint) hint.classList.toggle('show', playing);
+      }
+      window.addEventListener('message', function (ev) {
+        // 同源校验：只接受来自本播放器 iframe 的消息
+        if (ev.source !== musicFrame || !ev.data || typeof ev.data !== 'object') return;
+        if (ev.data.type === 'mp-playing') setHint(!!ev.data.playing);
+      });
+
+      // 首次切到音乐标签后（iframe 已就绪）请求一次当前播放状态
+      musicFrame.addEventListener('load', function () {
+        try { musicFrame.contentWindow.postMessage({ type: 'mp-query-state' }, '*'); } catch (e) {}
+      });
+    })();
+  </script>
 </body>
 </html>

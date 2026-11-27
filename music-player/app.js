@@ -609,6 +609,15 @@
     updateActiveRow();
   }
 
+  // 通知外层容器（门户 shell）当前是否正在播放；独立打开时 window.parent===window，不发消息
+  function postPlayState(playing) {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'mp-playing', playing: !!playing }, '*');
+      }
+    } catch (e) {}
+  }
+
   // 统一更新进度条与时间（播放条 + 详情页两处同步）
   function updateProgressUI(percent, cur, dur) {
     dom.progressBar.value = String(percent);
@@ -740,10 +749,17 @@
     dom.audio.addEventListener('play', () => {
       state.isPlaying = true;
       syncPlayUI();
+      postPlayState(true);
     });
     dom.audio.addEventListener('pause', () => {
       state.isPlaying = false;
       syncPlayUI();
+      postPlayState(false);
+    });
+
+    // 响应外层容器的状态查询（用于切换标签后同步“音乐播放中”提示）
+    window.addEventListener('message', (ev) => {
+      if (ev.data && ev.data.type === 'mp-query-state') postPlayState(state.isPlaying);
     });
     dom.audio.addEventListener('timeupdate', () => {
       if (state.seeking) return;
