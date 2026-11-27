@@ -34,6 +34,20 @@ def _song_src(line):
         return None
     return t.split("|")[0].strip()
 
+AUDIO_EXTS = (".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac", ".opus", ".wma", ".aiff", ".aif")
+
+
+def _audio_files():
+    """列出 resource/ 目录下的所有音频文件（实时扫描，供 /api/list 使用）。"""
+    d = os.path.join(ROOT, "resource")
+    if not os.path.isdir(d):
+        return []
+    out = []
+    for name in sorted(os.listdir(d)):
+        if name.lower().endswith(AUDIO_EXTS) and os.path.isfile(os.path.join(d, name)):
+            out.append(name)
+    return out
+
 
 def move_song_in_playlist(src, from_cat, to_cat):
     """把 src 指向的歌曲从 from_cat 移动到 to_cat；返回 (ok, msg)。"""
@@ -93,6 +107,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     # ---------- GET：静态文件 + Range ----------
     def do_GET(self):
+        # /api/list —— 实时列出 resource/ 中的音频文件（真正的“自动识别”）
+        if self.path.split("?")[0] == "/api/list":
+            return self._json(200, {"audio": _audio_files()})
         path = self.translate_path(self.path)
         if os.path.isdir(path) or not os.path.isfile(path):
             return super().do_GET()

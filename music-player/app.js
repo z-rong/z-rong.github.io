@@ -127,10 +127,142 @@
   // 运行期由清单构建的分类数据（初始化时异步加载）
   let CATEGORIES = [];
 
-  async function loadPlaylist() {
-    const res = await fetch(PLAYLIST_FILE + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    CATEGORIES = parsePlaylist(await res.text());
+  // 音频扩展名（用于识别资源目录里的音频文件）
+  const AUDIO_EXT = /\.(mp3|wav|ogg|m4a|flac|aac|opus|wma|aiff?)$/i;
+
+  // 播放列表是“可选”的：读不到不算错误，返回空字符串即可
+  async function fetchPlaylistText() {
+    try {
+      const res = await fetch(PLAYLIST_FILE + '?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) return '';
+      return await res.text();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // 获取音频目录里的所有音频文件名：
+  //   1) 优先 serve.py 的 /api/list（实时扫描，真正“自动识别新增文件”）
+  //   2) 退回构建期生成的静态清单 resource/audio-list.json（GitHub Pages 等纯静态托管）
+  async function fetchAudioList() {
+    try {
+      const res = await fetch('api/list?t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) {
+        const j = await res.json();
+        if (j && Array.isArray(j.audio)) return j.audio.slice();
+      }
+    } catch (e) { /* 没有后端接口，忽略 */ }
+    try {
+      const res = await fetch('resource/audio-list.json?t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) {
+        const j = await res.json();
+        if (j && Array.isArray(j.audio)) return j.audio.slice();
+      }
+    } catch (e) { /* 没有静态清单，忽略 */ }
+    return [];
+  }
+
+  // 由音频文件名构造一首歌（未在清单里登记时使用）
+  function songFromFile(fileName, usedIds) {
+    const base = fileName.replace(/\.[^.]+$/, '');
+    let id = base;
+    let n = 1;
+    while (usedIds.has(id)) id = base + '-' + (n++);
+    usedIds.add(id);
+    return {
+      id: id,
+      title: base,
+      artist: '未知歌手',
+      album: '',
+      lyrics: '',
+      src: 'resource/' + fileName,
+      cover: gradientFor(base + id),
+    };
+  }
+
+  // 组装分类：清单（可选） + 资源目录里未被清单引用的音频（→ 未分组）
+  function buildCategories(playlistText, audioFiles) {
+    let cats = playlistText ? parsePlaylist(playlistText) : [];
+
+    const usedIds = new Set();
+    const referenced = new Set();
+    cats.forEach(function (c) {
+      c.songs.forEach(function (song) {
+        usedIds.add(song.id);
+        referenced.add(song.src.substring(song.src.lastIndexOf('/') + 1));
+      });
+    });
+
+    const ungrouped = [];
+    (audioFiles || []).forEach(function (fn) {
+      if (!AUDIO_EXT.test(fn)) return;
+      if (referenced.has(fn)) return;
+      ungrouped.push(songFromFile(fn, usedIds));
+    });
+
+    if (ungrouped.length) {
+      cats.push({
+        id: '\u672a\u5206\u7ec4',
+        name: '\u672a\u5206\u7ec4',
+        icon: '\ud83d\udce5',
+        desc: '\u8d44\u6e90\u76ee\u5f55\u4e2d\u672a\u7f16\u5165\u6e05\u5355\u7684\u97f3\u9891',
+        theme: gradientFor('\u672a\u5206\u7ec4'),
+        songs: ungrouped,
+      });
+    }
+    return cats;
+  }
+
+  /* ---- 本地分组覆盖层：支持“新建分组”和“移动”在纯静态环境也能持久化 ---- */
+  const OVERLAY_KEY = 'mp-groups-v1';
+  function readOverlay() {
+    try {
+      const o = JSON.parse(localStorage.getItem(OVERLAY_KEY));
+      if (o && typeof o === 'object') {
+        return {
+          groups: Array.isArray(o.groups) ? o.groups : [],
+          assign: (o.assign && typeof o.assign === 'object') ? o.assign : {},
+        };
+      }
+    } catch (e) {}
+    return { groups: [], assign: {} };
+  }
+  function writeOverlay(o) {
+    try { localStorage.setItem(OVERLAY_KEY, JSON.stringify(o)); } catch (e) {}
+  }
+  function ensureCategory(name) {
+    let cat = CATEGORIES.find(function (c) { return c.name === name; });
+    if (!cat) {
+      const st = styleFor(name);
+      cat = { id: name, name: name, icon: st.icon, desc: st.desc, theme: st.theme, songs: [] };
+      CATEGORIES.push(cat);
+    }
+    return cat;
+  }
+  function moveSongBySrc(src, toName) {
+    let song = null;
+    CATEGORIES.forEach(function (c) {
+      const idx = c.songs.findIndex(function (s2) { return s2.src === src; });
+      if (idx >= 0) { if (!song) song = c.songs[idx]; c.songs.splice(idx, 1); }
+    });
+    if (song) ensureCategory(toName).songs.push(song);
+  }
+  function applyOverlay() {
+    const o = readOverlay();
+    o.groups.forEach(function (g) { ensureCategory(g); });
+    Object.keys(o.assign).forEach(function (src) { moveSongBySrc(src, o.assign[src]); });
+  }
+  function createGroup(name) {
+    name = String(name == null ? '' : name).trim();
+    if (!name) { toast('\u8bf7\u8f93\u5165\u5206\u7ec4\u540d\u79f0'); return false; }
+    if (CATEGORIES.some(function (c) { return c.name === name; })) { toast('\u5df2\u5b58\u5728\u540c\u540d\u5206\u7ec4'); return false; }
+    const o = readOverlay();
+    if (o.groups.indexOf(name) === -1) o.groups.push(name);
+    writeOverlay(o);
+    ensureCategory(name);
+    renderCategories();
+    toast('\u5df2\u521b\u5efa\u5206\u7ec4\u300c' + name + '\u300d');
+    return true;
   }
 
   /* =======================================================
@@ -587,6 +719,23 @@
     const moveBackdrop = dom.moveModal.querySelector('[data-close]');
     if (moveBackdrop) moveBackdrop.addEventListener('click', closeMoveModal);
 
+    // 新建分组
+    const cgBtn = document.getElementById('createGroupBtn');
+    if (cgBtn) cgBtn.addEventListener('click', openCreateGroupModal);
+    const cgModal = document.getElementById('createGroupModal');
+    if (cgModal) {
+      const cgCancel = document.getElementById('createGroupCancel');
+      if (cgCancel) cgCancel.addEventListener('click', closeCreateGroupModal);
+      const cgBackdrop = cgModal.querySelector('[data-close-cg]');
+      if (cgBackdrop) cgBackdrop.addEventListener('click', closeCreateGroupModal);
+      const cgConfirm = document.getElementById('createGroupConfirm');
+      if (cgConfirm) cgConfirm.addEventListener('click', confirmCreateGroup);
+      const cgInput = document.getElementById('createGroupInput');
+      if (cgInput) cgInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); confirmCreateGroup(); }
+      });
+    }
+
     // 音频事件
     dom.audio.addEventListener('play', () => {
       state.isPlaying = true;
@@ -621,6 +770,8 @@
     // 键盘快捷键（Esc：先关移动弹窗，再关详情页）
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      const cgm = document.getElementById('createGroupModal');
+      if (cgm && !cgm.classList.contains('is-hidden')) { closeCreateGroupModal(); return; }
       if (!dom.moveModal.classList.contains('is-hidden')) { closeMoveModal(); return; }
       if (!dom.nowPlayingView.classList.contains('is-hidden')) closeNowPlaying();
     });
@@ -686,6 +837,27 @@
     currentMoveSong = null;
   }
 
+  // 新建分组弹窗
+  function openCreateGroupModal() {
+    const m = document.getElementById('createGroupModal');
+    const inp = document.getElementById('createGroupInput');
+    if (!m) return;
+    if (inp) inp.value = '';
+    m.classList.remove('is-hidden');
+    m.setAttribute('aria-hidden', 'false');
+    if (inp) setTimeout(function () { inp.focus(); }, 30);
+  }
+  function closeCreateGroupModal() {
+    const m = document.getElementById('createGroupModal');
+    if (!m) return;
+    m.classList.add('is-hidden');
+    m.setAttribute('aria-hidden', 'true');
+  }
+  function confirmCreateGroup() {
+    const inp = document.getElementById('createGroupInput');
+    if (createGroup(inp ? inp.value : '')) closeCreateGroupModal();
+  }
+
   // 内存中把歌曲从原分类移到目标分类
   function moveInMemory(song, toName) {
     const from = categoryOfSong(song.src);
@@ -716,29 +888,30 @@
     }
   }
 
-  // 执行移动：优先写回 playlist.txt（需 serve.py 的 /api/move），失败则仅在内存移动
+  // 执行移动：本地覆盖层持久化（静态托管也生效） + 尝试写回 playlist.txt（serve.py 的 /api/move）
   async function doMove(song, toName) {
     const from = categoryOfSong(song.src);
     if (!from || from.name === toName) { closeMoveModal(); return; }
-    let persisted = false;
+    // 1) 本地持久化：记住这首歌归属到目标分组（刷新后仍有效）
+    const o = readOverlay();
+    o.assign[song.src] = toName;
+    writeOverlay(o);
+    // 2) 尽力写回 playlist.txt（仅 serve.py 后端可用时）
     try {
-      const res = await fetch('api/move', {
+      await fetch('api/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ src: song.src, from: from.name, to: toName }),
       });
-      if (res.ok) persisted = true;
-    } catch (e) {
-      persisted = false;
-    }
-    // 无论是否持久化成功，界面先同步移动
+    } catch (e) { /* 静态托管没有后端接口，交给本地覆盖层 */ }
+    // 3) 界面同步移动
     moveInMemory(song, toName);
     rebuildQueueForCurrentCategory();
     rerenderCurrentView();
     const cur = state.currentIndex >= 0 ? state.queue[state.currentIndex] : null;
     if (cur && cur.src === song.src) updateTrackInfo(cur);
     closeMoveModal();
-    toast(persisted ? ('已移动到「' + toName + '」') : '已移动（未能写入 playlist.txt，仅本次有效）');
+    toast('已移动到「' + toName + '」');
   }
 
   /* =======================================================
@@ -763,15 +936,25 @@
     // 先绑定事件：即使清单加载失败，播放条控件也可用
     bindEvents();
 
-    // 从 resource/playlist.txt 读取分类与歌曲
+    // 读取：播放列表（可选） + 资源目录音频（自动识别） + 本地分组覆盖
     try {
-      await loadPlaylist();
-      renderCategories();
+      const both = await Promise.all([fetchPlaylistText(), fetchAudioList()]);
+      CATEGORIES = buildCategories(both[0], both[1]);
+      applyOverlay();
+      // 未分组若已空则不显示（避免空分类干扰）
+      CATEGORIES = CATEGORIES.filter(function (c) {
+        return !(c.name === '\u672a\u5206\u7ec4' && c.songs.length === 0);
+      });
+      if (!CATEGORIES.length) {
+        dom.categoriesGrid.innerHTML =
+          '<p class="load-error">\u8fd8\u6ca1\u6709\u53ef\u64ad\u653e\u7684\u97f3\u4e50\u3002\u628a\u97f3\u9891\u6587\u4ef6\u653e\u8fdb resource/ \u76ee\u5f55\u5373\u53ef\u81ea\u52a8\u51fa\u73b0\u5728\u300c\u672a\u5206\u7ec4\u300d\uff0c\u6216\u5728 resource/playlist.txt \u4e2d\u767b\u8bb0\u5206\u7c7b\u3002</p>';
+      } else {
+        renderCategories();
+      }
     } catch (e) {
       dom.categoriesGrid.innerHTML =
-        '<p class="load-error">音乐清单加载失败（resource/playlist.txt）：' +
-        escapeHtml(e && e.message ? e.message : String(e)) +
-        '。请确认通过 HTTP 服务打开本页面，且该文件存在。</p>';
+        '<p class="load-error">加载失败：' +
+        escapeHtml(e && e.message ? e.message : String(e)) + '</p>';
     }
   }
 

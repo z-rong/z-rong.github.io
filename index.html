@@ -1,139 +1,165 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="一个站点，两种视图：本地文件查看器（左侧文件树 + 沉浸式阅读）与本地音乐播放器。" />
-  <title>文档查看 · 音乐播放</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="z-rong 的个人空间：文件查看器与本地音乐播放器两个入口。" />
+  <title>z-rong · 我的空间</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --bg-2: #111a33;
+      --card: rgba(255, 255, 255, 0.05);
+      --card-hover: rgba(255, 255, 255, 0.09);
+      --border: rgba(255, 255, 255, 0.10);
+      --text: #e9eefb;
+      --muted: #9aa6c2;
+      --accent: #5b8cff;
+      --accent-2: #a855f7;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #eef2fb;
+        --bg-2: #ffffff;
+        --card: #ffffff;
+        --card-hover: #ffffff;
+        --border: #e2e8f4;
+        --text: #1a2238;
+        --muted: #66718c;
+        --accent: #2563eb;
+        --accent-2: #7c3aed;
+        --shadow: 0 16px 44px rgba(37, 60, 120, 0.14);
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 700px at 15% -10%, rgba(91, 140, 255, 0.28), transparent 60%),
+        radial-gradient(1000px 600px at 100% 110%, rgba(168, 85, 247, 0.24), transparent 55%),
+        linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+    .landing {
+      width: min(920px, 100%);
+    }
+    .hero {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .logo {
+      width: 64px; height: 64px; margin: 0 auto 18px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 18px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff; font-size: 34px; font-weight: 800; letter-spacing: -1px;
+      box-shadow: var(--shadow);
+    }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(26px, 4vw, 40px);
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .hero p { margin: 0; color: var(--muted); font-size: 15px; }
+
+    .entries {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 640px) {
+      .entries { grid-template-columns: 1fr; }
+    }
+
+    .entry {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 28px;
+      min-height: 210px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      text-decoration: none;
+      overflow: hidden;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+      box-shadow: var(--shadow);
+    }
+    .entry::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      opacity: 0.9;
+    }
+    .entry--docs::before { background: linear-gradient(90deg, #5b8cff, #38bdf8); }
+    .entry--music::before { background: linear-gradient(90deg, #f472b6, #a855f7); }
+    .entry:hover {
+      transform: translateY(-4px);
+      background: var(--card-hover);
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    }
+    .entry__icon {
+      width: 52px; height: 52px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+      border-radius: 14px;
+      background: rgba(127, 127, 160, 0.16);
+    }
+    .entry__title { font-size: 22px; font-weight: 750; }
+    .entry__desc { color: var(--muted); font-size: 14px; line-height: 1.55; flex: 1; }
+    .entry__cta {
+      align-self: flex-start;
+      font-size: 14px; font-weight: 700;
+      color: var(--accent);
+    }
+    .entry--music .entry__cta { color: var(--accent-2); }
+
+    .foot {
+      margin-top: 36px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12.5px;
+      letter-spacing: 0.3px;
+    }
+  </style>
 </head>
 <body>
-  <nav class="app-tabs" role="tablist" aria-label="功能切换">
-    <button class="app-tab active" data-tab="files" role="tab" aria-selected="true">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
-      <span>文件查看</span>
-    </button>
-    <button class="app-tab" data-tab="music" role="tab" aria-selected="false">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-      <span>音乐播放</span>
-    </button>
-  </nav>
-
-  <div class="tab-panels">
-    <section id="panel-files" class="tab-panel active" role="tabpanel" aria-label="文件查看">
-      <div class="app">
-    <!-- ============ 顶部工具栏 ============ -->
-    <header class="topbar">
-      <button class="icon-btn" id="menuBtn" title="显示 / 隐藏侧栏" aria-label="切换侧栏">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
-      </button>
-
-      <div class="brand">
-        <span class="brand-mark">R</span>
-        <span class="brand-title">README 查看器</span>
-      </div>
-
-      <div class="topbar-spacer"></div>
-
-      <div class="search-box" id="searchBox">
-        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <circle cx="11" cy="11" r="7" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input id="searchInput" type="text" placeholder="搜索文件或路径…" autocomplete="off" spellcheck="false" />
-        <button class="search-clear" id="searchClear" hidden aria-label="清除搜索">×</button>
-      </div>
-
-      <label class="toggle-chip" title="同时匹配正文内容">
-        <input type="checkbox" id="searchContentToggle" />
-        <span class="chip-box"></span>
-        <span class="chip-text">搜正文</span>
-      </label>
-
-      <label class="btn btn-open" for="folderInput" title="选择本地文件夹">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-        </svg>
-        <span>打开文件夹</span>
-      </label>
-      <input id="folderInput" type="file" webkitdirectory directory multiple hidden />
-
-      <button class="icon-btn" id="reloadBtn" title="重新读取 resource/ 目录" aria-label="重新读取">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-          <path d="M21 3v6h-6" />
-        </svg>
-      </button>
-      <button class="icon-btn theme-btn" id="themeBtn" title="切换明暗主题" aria-label="切换主题">
-        <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <circle cx="12" cy="12" r="4.2" />
-          <path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7" />
-        </svg>
-        <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.8 6.8 0 0 0 9.8 9.8Z" />
-        </svg>
-      </button>
+  <main class="landing">
+    <header class="hero">
+      <div class="logo">z</div>
+      <h1>我的空间</h1>
+      <p>选择一个入口开始</p>
     </header>
 
-    <!-- ============ 主体：侧栏 + 阅读区 ============ -->
-    <div class="workspace">
-      <aside class="sidebar" id="sidebar">
-        <div class="sidebar-head">
-          <span class="sidebar-title">文件</span>
-          <span class="pill" id="fileCount">0</span>
-        </div>
-        <nav class="file-tree" id="fileTree" aria-label="文件列表"></nav>
-        <div class="sidebar-foot">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="11" width="16" height="9" rx="2" />
-            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-          </svg>
-          <span>默认读取 resource/ 目录 · 全程本地不上传</span>
-        </div>
-      </aside>
+    <section class="entries">
+      <a class="entry entry--docs" href="readme-view/">
+        <span class="entry__icon">📄</span>
+        <span class="entry__title">文件查看</span>
+        <span class="entry__desc">本地 README / 文档查看器：左侧文件树、沉浸式阅读、明暗主题、全文搜索。</span>
+        <span class="entry__cta">进入文件查看 →</span>
+      </a>
 
-      <div class="overlay" id="overlay"></div>
-
-      <main class="main" id="main">
-        <div class="breadcrumb" id="breadcrumb"></div>
-        <div class="reading">
-          <article class="markdown-body" id="content" aria-live="polite"></article>
-        </div>
-      </main>
-    </div>
-      </div><!-- /.app -->
+      <a class="entry entry--music" href="music-player/">
+        <span class="entry__icon">🎵</span>
+        <span class="entry__title">音乐播放</span>
+        <span class="entry__desc">本地音乐播放器：分类浏览、自动收录新音频到「未分组」、可自建分组。</span>
+        <span class="entry__cta">进入音乐播放 →</span>
+      </a>
     </section>
 
-    <section id="panel-music" class="tab-panel" role="tabpanel" aria-label="音乐播放">
-      <iframe class="music-frame" src="music-player/index.html" title="音乐播放器" loading="lazy"></iframe>
-    </section>
-  </div><!-- /.tab-panels -->
-
-  <!-- 拖拽提示覆盖层 -->
-  <div class="drop-overlay" id="dropOverlay">
-    <div class="drop-card">
-      <div class="drop-icon">
-        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-          <path d="M12 11v5M9.5 13.5 12 11l2.5 2.5" />
-        </svg>
-      </div>
-      <p class="drop-title">松开以打开文件夹</p>
-      <p class="drop-sub">将自动读取其中的 Markdown / README 文件</p>
-    </div>
-  </div>
-
-  <!-- 轻提示 -->
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <script src="markdown.js"></script>
-  <script src="sample-data.js"></script>
-  <script src="resource-data.js"></script>
-  <script src="app.js"></script>
-  <script src="tabs.js"></script>
+    <footer class="foot">© z-rong · 纯静态 · 本地优先 · 数据不上传</footer>
+  </main>
 </body>
 </html>

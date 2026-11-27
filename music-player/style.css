@@ -1036,3 +1036,63 @@ button {
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes popIn { from { opacity: 0; transform: scale(0.94) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+/* ============================================================
+   新增：分类页“新建分组”按钮 + 新建分组弹窗
+   ============================================================ */
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.section-head__text { min-width: 0; }
+
+.create-group-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s var(--ease, ease), border-color 0.18s var(--ease, ease);
+}
+.create-group-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: var(--accent); }
+.create-group-btn__plus { color: var(--accent); font-weight: 800; }
+
+.modal__input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.18s ease;
+}
+.modal__input::placeholder { color: var(--text-dim, #8891a8); }
+.modal__input:focus { border-color: var(--accent); }
+
+.modal__actions { display: flex; gap: 10px; margin-top: 18px; }
+.modal__actions .modal__cancel { margin-top: 0; flex: 1; width: auto; }
+.modal__confirm {
+  flex: 1;
+  padding: 11px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: filter 0.18s ease;
+}
+.modal__confirm:hover { filter: brightness(1.08); }

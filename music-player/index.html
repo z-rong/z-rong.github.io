@@ -22,8 +22,13 @@
     <!-- 分类卡片视图 -->
     <section id="categoriesView" class="view categories-view">
       <div class="section-head">
-        <h2 class="section-head__title">音乐分类</h2>
-        <p class="section-head__hint">选择一个分类，开始聆听</p>
+        <div class="section-head__text">
+          <h2 class="section-head__title">音乐分类</h2>
+          <p class="section-head__hint">选择一个分类开始聆听 · 资源目录中的新音频会自动进入「未分组」</p>
+        </div>
+        <button id="createGroupBtn" class="create-group-btn" type="button">
+          <span class="create-group-btn__plus">＋</span>新建分组
+        </button>
       </div>
       <div id="categoriesGrid" class="categories-grid"></div>
     </section>
@@ -126,6 +131,19 @@
       <h3 class="modal__title">移动《<span id="moveSongTitle"></span>》到分类</h3>
       <div id="moveCategoryList" class="modal__list"></div>
       <button id="moveCancelBtn" class="modal__cancel" type="button">取消</button>
+    </div>
+  </div>
+
+  <!-- 新建分组弹窗 -->
+  <div id="createGroupModal" class="modal is-hidden" aria-hidden="true">
+    <div class="modal__backdrop" data-close-cg></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="新建分组">
+      <h3 class="modal__title">新建分组</h3>
+      <input id="createGroupInput" class="modal__input" type="text" placeholder="输入分组名称，例如：我的最爱" maxlength="20" autocomplete="off" />
+      <div class="modal__actions">
+        <button id="createGroupConfirm" class="modal__confirm" type="button">创建</button>
+        <button id="createGroupCancel" class="modal__cancel" type="button">取消</button>
+      </div>
     </div>
   </div>
 
