@@ -139,6 +139,85 @@
     return RESOURCE_ROOT + rel.split('/').map(encodeURIComponent).join('/');
   }
 
+  /* ---------------- 默认数据源：GitHub 仓库 z-rong/docs ---------------- */
+  var GITHUB_REPO = { owner: 'z-rong', repo: 'docs', branch: 'main' };
+  var GH_RAW_BASE = 'https://raw.githubusercontent.com/' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo + '/' + GITHUB_REPO.branch + '/';
+  var JSDP_BASE = 'https://cdn.jsdelivr.net/gh/' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo + '@' + GITHUB_REPO.branch + '/';
+  var JSD_DATA_API = 'https://data.jsdelivr.com/v1/packages/gh/' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo + '@' + GITHUB_REPO.branch + '?structure=flat';
+  var GH_TREE_API = 'https://api.github.com/repos/' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo + '/git/trees/' + GITHUB_REPO.branch + '?recursive=1';
+
+  function encodeGitHubPath(rel) {
+    return rel.split('/').map(encodeURIComponent).join('/');
+  }
+
+  // 获取仓库文件路径列表：优先 jsDelivr 数据接口（国内可达性更好），回退 GitHub API
+  function fetchGitHubFileList() {
+    return fetch(JSD_DATA_API, { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('jsDelivr data ' + r.status); return r.json(); })
+      .then(function (j) {
+        var files = (j && j.files) ? j.files : [];
+        var paths = files.map(function (f) { return String(f.name || '').replace(/^\/+/, ''); }).filter(Boolean);
+        if (!paths.length) throw new Error('jsDelivr 文件列表为空');
+        return paths;
+      })
+      .catch(function (e1) {
+        console.warn('[readme-viewer] jsDelivr 列表失败，回退 GitHub API：', e1 && e1.message);
+        return fetch(GH_TREE_API, { cache: 'no-store' })
+          .then(function (r) { if (!r.ok) throw new Error('GitHub API ' + r.status); return r.json(); })
+          .then(function (j) {
+            if (!j || !j.tree) throw new Error('GitHub 目录树为空');
+            return j.tree.filter(function (t) { return t.type === 'blob'; }).map(function (t) { return t.path; });
+          });
+      });
+  }
+
+  // 取文本：优先 jsDelivr CDN，失败回退 raw.githubusercontent
+  function fetchTextWithFallback(rel) {
+    var enc = encodeGitHubPath(rel);
+    return fetch(JSDP_BASE + enc, { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('jsDelivr ' + r.status); return r.text(); })
+      .catch(function () {
+        return fetch(GH_RAW_BASE + enc, { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.text() : ''; })
+          .catch(function () { return ''; });
+      });
+  }
+
+  // 从 z-rong/docs 读取文件，构建 state.files
+  function loadGitHubDocs() {
+    return fetchGitHubFileList().then(function (paths) {
+      var tasks = [];
+      paths.forEach(function (rawPath) {
+        var rel = normalizePath(rawPath);
+        if (!rel) return;
+        var nm = baseName(rel);
+        var kind = fileKind(nm);
+        if (kind === 'binary') return; // 跳过压缩包 / 视频等二进制
+        var th = themeOf(rel);
+        var jsUrl = JSDP_BASE + encodeGitHubPath(rel);
+        if (kind === 'image') {
+          state.blobUrls[rel] = jsUrl;
+          tasks.push(Promise.resolve({ path: rel, name: nm, theme: th, kind: kind, url: jsUrl }));
+          return;
+        }
+        // 正文按需加载（见 ensureContent），这里只登记路径
+        tasks.push(Promise.resolve({ path: rel, name: nm, theme: th, kind: kind, url: jsUrl, _remote: rel }));
+      });
+      return Promise.all(tasks);
+    });
+  }
+
+  // 默认加载：先 GitHub docs，失败再回退本地 resource
+  function loadDefaultSource() {
+    resetForLoad('github');
+    loadGitHubDocs()
+      .then(function (files) { finalizeResourceFiles(files); })
+      .catch(function (err) {
+        console.warn('[readme-viewer] GitHub 读取失败，回退本地 resource：', err && err.message);
+        loadResourceDir();
+      });
+  }
+
   // 递归抓取目录列表（适用于 python -m http.server / nginx autoindex 等返回 HTML 列表的静态服务器）
   function crawlResource() {
     function walk(dirUrl, baseRel) {
@@ -255,7 +334,10 @@
     var _md = state.files.filter(function (f) { return f.kind === 'markdown'; })[0];
     state.activePath = (_readme || _md || state.files[0]).path;
     renderAll();
-    toast('已从 resource/ 读取 ' + state.files.length + ' 个文件');
+    var _srcLabel = (state.source === 'github')
+      ? ('GitHub: ' + GITHUB_REPO.owner + '/' + GITHUB_REPO.repo)
+      : 'resource/';
+    toast('已从 ' + _srcLabel + ' 读取 ' + state.files.length + ' 个文件');
   }
 
   function loadResourceDir() {
@@ -407,6 +489,18 @@
     });
   }
 
+  // 远程文件按需加载正文（GitHub 源默认不预取全部内容）
+  function ensureContent(f, cb) {
+    if (f.content !== undefined) { cb(); return; }
+    if (f._loading) return;
+    f._loading = true;
+    fetchTextWithFallback(f._remote || f.path).then(function (txt) {
+      f.content = txt; f._loading = false; cb();
+    }).catch(function () {
+      f.content = ''; f._loading = false; cb();
+    });
+  }
+
   function renderContent() {
     var contentEl = $('#content');
     var crumb = $('#breadcrumb');
@@ -445,6 +539,16 @@
     }).join('<span class="sep">/</span>');
 
     var kind = f.kind || 'markdown';
+
+    // 远程文件正文未加载时，先显示加载中再拉取
+    if ((kind === 'markdown' || kind === 'text') && f.content === undefined) {
+      contentEl.innerHTML = '<div class="empty-state"><div class="spinner"></div><p>正在读取「' + escapeHtml(f.name) + '」…</p></div>';
+      ensureContent(f, function () {
+        if (state.activePath === f.path) renderContent();
+      });
+      return;
+    }
+
     if (kind === 'image') {
       contentEl.innerHTML = '<div class="media-view"><img alt="' + escapeHtml(f.name) + '" src="' + escapeHtml(f.url || '') + '"></div>';
     } else if (kind === 'text') {
@@ -452,7 +556,7 @@
     } else if (kind === 'binary') {
       contentEl.innerHTML = renderBinaryNotice(f);
     } else {
-      var html = window.MarkdownRenderer.render(f.content, {
+      var html = window.MarkdownRenderer.render(f.content || '', {
         resolveImage: function (src) { return resolveImageFor(f, src); }
       });
       contentEl.innerHTML = html;
@@ -708,7 +812,7 @@
     if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
 
     var reloadBtn = $('#reloadBtn');
-    if (reloadBtn) reloadBtn.addEventListener('click', function () { loadResourceDir(); });
+    if (reloadBtn) reloadBtn.addEventListener('click', function () { loadDefaultSource(); });
 
     // 侧栏按钮 / 遮罩
     var menuBtn = $('#menuBtn');
@@ -859,7 +963,7 @@
   function init() {
     initTheme();
     bindEvents();
-    loadResourceDir();
+    loadDefaultSource();
   }
 
   if (document.readyState === 'loading') {
