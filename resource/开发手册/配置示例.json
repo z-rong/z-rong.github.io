@@ -1,0 +1,8 @@
+{
+  "name": "readme-viewer",
+  "version": "1.0.0",
+  "resourceRoot": "resource/",
+  "theme": "auto",
+  "features": ["tree", "search", "markdown", "images", "code-preview"],
+  "author": "your-team"
+}
